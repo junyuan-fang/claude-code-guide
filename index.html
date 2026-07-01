@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code 多代理可视化指南</title>
+<script src="assets/marked.min.js"></script>
+<script src="assets/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#fbfcfd; --fg:#1c2128; --muted:#6b7480; --border:#e3e8ee;
+    --sidebar:#f4f6f9; --code-bg:#f3f5f8; --accent:#3b6ef0; --accent-2:#7c5cff;
+    --accent-soft:#e9f0ff; --card:#ffffff; --shadow:0 4px 20px rgba(30,40,70,.07);
+    --hero1:#3b6ef0; --hero2:#7c5cff;
+    --warn-bd:#e3a008; --warn-bg:#fff8e6; --tip-bd:#2da44e; --tip-bg:#e8f7ee;
+  }
+  html[data-theme="dark"]{
+    --bg:#0c1016; --fg:#dde3ea; --muted:#8a93a0; --border:#222a35;
+    --sidebar:#10151c; --code-bg:#141a22; --accent:#6ea0ff; --accent-2:#a98bff;
+    --accent-soft:#16202e; --card:#11161e; --shadow:0 4px 24px rgba(0,0,0,.45);
+    --hero1:#2a4fb0; --hero2:#5a3fc0;
+    --warn-bd:#d4a72c; --warn-bg:#2a2410; --tip-bd:#3fb950; --tip-bg:#0f2417;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans CJK SC","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.75; display:flex;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* 顶部阅读进度条 */
+  #progress{position:fixed; top:0; left:0; height:3px; width:0;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2)); z-index:100; transition:width .1s;}
+  /* 侧栏 */
+  #toc{
+    position:sticky; top:0; align-self:flex-start;
+    width:288px; min-width:288px; height:100vh; overflow-y:auto;
+    background:var(--sidebar); border-right:1px solid var(--border); padding:26px 16px;
+  }
+  #toc .brand{font-weight:700; font-size:15px; margin:0 8px 4px; display:flex; gap:8px; align-items:center;}
+  #toc .brand .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));}
+  #toc .sub{font-size:12px; color:var(--muted); margin:0 8px 18px;}
+  #toc a{display:block; color:var(--fg); text-decoration:none; padding:6px 10px; border-radius:8px;
+    font-size:13.5px; opacity:.82; border-left:2px solid transparent; transition:all .12s;}
+  #toc a:hover{background:var(--accent-soft); opacity:1;}
+  #toc a.lvl3{padding-left:26px; font-size:12.5px; opacity:.62;}
+  #toc a.active{background:var(--accent-soft); color:var(--accent); font-weight:600; opacity:1; border-left-color:var(--accent);}
+  /* 主体 */
+  main{flex:1; min-width:0;}
+  .wrap{max-width:880px; margin:0 auto; padding:0 56px 140px;}
+  /* hero */
+  .hero{background:linear-gradient(135deg,var(--hero1),var(--hero2)); color:#fff;
+    margin:0 -9999px 40px; padding:54px 9999px 46px; position:relative;}
+  .hero-inner{max-width:880px; margin:0 auto; padding:0 56px;}
+  .hero h1{border:none; margin:0 0 10px; font-size:34px; font-weight:800; letter-spacing:-.01em;}
+  .hero p{margin:0; opacity:.92; font-size:15.5px; max-width:620px;}
+  .hero-meta{margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;}
+  .chip{background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.25);
+    border-radius:999px; padding:5px 14px; font-size:12.5px; backdrop-filter:blur(4px);}
+  #themeBtn{position:absolute; top:22px; right:9999px; margin-right:-880px;
+    cursor:pointer; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.14);
+    color:#fff; border-radius:10px; padding:7px 14px; font-size:13px;}
+  #themeBtn:hover{background:rgba(255,255,255,.26);}
+  /* 排版 */
+  h1{font-size:28px;}
+  h2{font-size:23px; margin-top:2.4em; padding:6px 0 10px 14px; border-left:4px solid var(--accent);
+     border-bottom:1px solid var(--border); scroll-margin-top:20px;}
+  h3{font-size:18.5px; margin-top:1.9em; scroll-margin-top:20px;}
+  h4{font-size:15px; margin-top:1.4em; color:var(--accent); font-weight:600;}
+  p,li{font-size:15.5px;}
+  blockquote{margin:1.2em 0; padding:.7em 1.1em; color:var(--muted);
+    border-left:4px solid var(--accent-2); background:var(--accent-soft); border-radius:0 8px 8px 0;}
+  blockquote p{margin:.3em 0;}
+  blockquote.cb-warn{border-left-color:var(--warn-bd); background:var(--warn-bg); color:var(--fg);}
+  blockquote.cb-tip{border-left-color:var(--tip-bd); background:var(--tip-bg); color:var(--fg);}
+  /* 回到顶部 */
+  #toTop{position:fixed; right:26px; bottom:26px; z-index:90; width:46px; height:46px;
+    border-radius:50%; border:1px solid var(--border); background:var(--card); color:var(--accent);
+    font-size:20px; cursor:pointer; box-shadow:var(--shadow); display:none; align-items:center; justify-content:center;}
+  #toTop.show{display:flex;}
+  #toTop:hover{background:var(--accent); color:#fff; border-color:var(--accent);}
+  /* 速览表首列高亮 */
+  table td:first-child strong{color:var(--accent);}
+  code{background:var(--code-bg); padding:.15em .45em; border-radius:6px; font-size:.85em;
+    font-family:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace; color:var(--accent-2);}
+  pre{background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:18px; overflow:auto;}
+  pre code{background:none; padding:0; font-size:13.5px; color:var(--fg);}
+  table{border-collapse:collapse; width:100%; margin:1.3em 0; font-size:14px; display:block; overflow:auto;
+    border-radius:10px;}
+  th,td{border:1px solid var(--border); padding:9px 13px; text-align:left;}
+  th{background:var(--accent-soft); font-weight:600;}
+  tr:nth-child(2n) td{background:var(--sidebar);}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  hr{border:none; border-top:1px solid var(--border); margin:3em 0;}
+  /* mermaid 卡片 */
+  .diagram{position:relative; background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:26px 22px 18px; margin:1.8em 0; box-shadow:var(--shadow);}
+  .diagram .zoom-hint{position:absolute; top:12px; right:14px; font-size:11.5px; color:var(--muted);
+    background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:3px 10px; opacity:.8;}
+  .diagram pre.mermaid{background:none; border:none; padding:0; margin:0; text-align:center;
+    cursor:zoom-in; overflow:auto;}
+  .diagram pre.mermaid svg{max-width:100%; height:auto;}
+  .mermaid-error{color:#cf222e; font-size:13px; text-align:left; white-space:pre-wrap; padding:10px;}
+  /* 修复 mermaid 中文标签被截断 */
+  .mermaid .nodeLabel, .mermaid .edgeLabel, .mermaid foreignObject div, .mermaid foreignObject span{ white-space:nowrap !important; }
+  .mermaid foreignObject{ overflow:visible !important; }
+  .mermaid .label{ overflow:visible !important; }
+  /* 放大遮罩 */
+  #lightbox{position:fixed; inset:0; background:rgba(10,14,20,.86); z-index:200;
+    display:none; align-items:center; justify-content:center; padding:30px; cursor:zoom-out;}
+  #lightbox.show{display:flex;}
+  #lightbox .box{background:var(--card); border-radius:14px; padding:24px; max-width:96vw; max-height:92vh; overflow:auto;}
+  #lightbox svg{max-width:none;}
+  #lightbox .close{position:fixed; top:18px; right:24px; color:#fff; font-size:30px; cursor:pointer; opacity:.8;}
+  @media(max-width:880px){
+    body{flex-direction:column}
+    #toc{position:static; width:100%; min-width:0; height:auto; border-right:none; border-bottom:1px solid var(--border);}
+    .wrap{padding:0 18px 80px;}
+    .hero-inner{padding:0 18px;}
+    #themeBtn{margin-right:18px; right:0;}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<nav id="toc">
+  <div class="brand"><span class="dot"></span>Claude Code</div>
+  <div class="sub">多代理能力 · 可视化指南</div>
+</nav>
+<main>
+  <header class="hero">
+    <div class="hero-inner">
+      <button id="themeBtn">🌙 暗色</button>
+      <h1>Claude Code 多代理可视化指南</h1>
+      <p>Subagents · Agent View · 代理团队 · 动态工作流 · Worktree 隔离 + 算法工程师/量化交易实战场景 —— 28 张流程图图解。</p>
+      <div class="hero-meta">
+        <span class="chip">📊 28 张 Mermaid 图</span>
+        <span class="chip">🔍 点击图表可放大</span>
+        <span class="chip">🌓 明暗主题</span>
+        <span class="chip">📦 离线自包含</span>
+      </div>
+    </div>
+  </header>
+  <div class="wrap"><article id="content"></article></div>
+</main>
+<div id="lightbox"><span class="close">✕</span><div class="box"></div></div>
+<button id="toTop" title="回到顶部">↑</button>
+
+<script type="text/markdown" id="md-source">
+# Claude Code 多代理能力可视化指南
+
+> 一份面向「自定义 Subagents / Agent View / 代理团队 / 动态工作流 / Worktree 隔离」的图解笔记。
+> 所有流程图用 [Mermaid](https://mermaid.js.org/) 绘制,在支持 Mermaid 的 Markdown 阅读器(VS Code 插件、Obsidian、GitHub 等)里可直接渲染。
+
+### ⏱️ 30 秒速览
+
+| 概念 | 一句话 | 类比 |
+|------|--------|------|
+| **默认主会话** | 你直接对话、上下文连续的那个 Claude | 你本人 / 项目负责人 |
+| **Subagent** | 一次性下属,干完一件活交摘要就走 | 临时叫来的专员 |
+| **Agent View** | 管理多个后台会话的看板 | 任务监控大屏 |
+| **Agent Teams** | 能互相通信的对等同事 | 一支并行小队 |
+| **Dynamic Workflow** | 脚本编排几十上百个 agent | 流水线 / 工厂 |
+| **Worktree** | 文件级隔离,让并行会话不打架 | 每人一份独立工作副本 |
+
+> 💡 **不知道用哪个?** 直接看 [§0 的决策图](#)。一次性小活用 **Subagent**;要讨论协作用 **Teams**;同类任务几十上百个用 **Workflow**;多个会话改同一份代码先上 **Worktree**。
+
+---
+
+## 0. 全景:五种「让 Claude 干更多活」的方式
+
+Claude Code 把「单会话单 Claude」扩展成多代理协作,核心有四种机制 + 一种隔离基建。先建立全局心智模型:
+
+```mermaid
+mindmap
+  root((Claude Code<br/>多代理))
+    Subagents
+      新鲜上下文的 worker
+      Claude 逐轮决定
+      工具/模型可裁剪
+      单会话内并行
+    Agent View
+      管理多个后台会话
+      监控/介入/分派
+      命令: claude agents
+    Agent Teams
+      多个对等会话
+      队员之间直接通信
+      共享任务清单
+    Dynamic Workflows
+      JS 脚本编排
+      运行时后台执行
+      几十到几百 agent
+    Worktrees
+      文件级隔离基建
+      并行会话不打架
+      上面四种都依赖它
+```
+
+### 怎么选?一张决策图
+
+```mermaid
+flowchart TD
+    A[我要做什么?] --> B{任务规模?}
+    B -->|单个子任务<br/>需要干净上下文| C[Subagent]
+    B -->|几个长期并行任务<br/>需要实时讨论协作| D[Agent Teams]
+    B -->|几十到几百个同类任务<br/>可脚本化编排| E[Dynamic Workflow]
+    A --> F{我只是想<br/>看/管已在跑的活?} 
+    F -->|是| G[Agent View]
+    A --> H{多个会话<br/>会改同一份代码?}
+    H -->|是| I[用 Worktrees 隔离]
+
+    style C fill:#cfe8ff
+    style D fill:#ffe7cf
+    style E fill:#d8f5d0
+    style G fill:#f5d0e8
+    style I fill:#fff3c4
+```
+
+### 四种机制的本质对比
+
+| 维度 | Subagents | Agent Teams | Dynamic Workflows | Agent View |
+|------|-----------|-------------|-------------------|------------|
+| 是什么 | 生成的 worker | lead 主管的对等会话 | 运行时执行的脚本 | 管理多会话的 UI |
+| **谁决定下一步** | Claude 逐轮 | 队长逐轮 | **脚本** | 用户 |
+| 中间结果存哪 | Claude 上下文 | 共享任务清单 | **脚本变量** | 各会话自身 |
+| 通信方式 | 只向上汇报 | **队员间 P2P** | 脚本协调 | — |
+| 规模 | 几个/轮 | 几个长跑对等体 | **几十到几百** | 任意多个 |
+| 隔离 | 上下文隔离 | worktree | worktree | worktree |
+
+---
+
+## 1. 创建自定义 Subagents
+
+### 先分清:主会话 vs Subagent vs Teammate
+
+这三个最容易混。一句话:**主会话是「你」,subagent 是你派的一次性下属,teammate 是和你对等的同事。**
+
+| | 默认主会话(你对话的 Claude) | Subagent | Teammate(代理团队) |
+|---|---|---|---|
+| 你和它的关系 | **你直接对话的就是它** | 主会话派生的一次性下属 | 对等同事 |
+| 上下文 | 完整、连续(整段历史) | **全新独立、用完即弃** | 各自持续 |
+| 通信 | — | **只向上回传摘要** | **彼此能直接通信** |
+| 工具/模型 | 会话全量配置 | 可裁剪(只读 / 换便宜模型) | 可继承 subagent 定义 |
+| 适合 | 你本人主导 | 派去干一件具体活 | 组队长期并行协作 |
+
+```mermaid
+flowchart TD
+    You["🧑 默认主会话<br/>(你对话的 Claude,记得全部上下文)"]
+    You -->|派一次性下属| SA["🤖 Subagent<br/>干净上下文 · 干完交摘要就走"]
+    You -->|组对等小队| TM["👥 Teammate ×N<br/>各有持续上下文 · 彼此能直接通信"]
+    SA -.只回传摘要.-> You
+    TM <-->|P2P 互相沟通| TM2["👥 其他 Teammate"]
+    TM2 -.汇报.-> You
+
+    style You fill:#fff3c4
+    style SA fill:#cfe8ff
+    style TM fill:#ffe7cf
+    style TM2 fill:#ffe7cf
+```
+
+> 💡 **调用速查(三选一):**
+> ① 自然语言委托:`用 code-reviewer 这个 subagent 审一下改动`(Claude 按 `description` 自动判断)
+> ② @点名(保证运行):`@agent-code-reviewer 看看 auth 模块`
+> ③ 整个会话都用:`claude --agent code-reviewer` 或 settings.json 写 `{ "agent": "code-reviewer" }`
+> 管理用 `/agents`;想后台跑就说「在后台运行」或按 `Ctrl+B`。
+
+### 1.1 它是什么 / 为什么用
+
+Subagent = 一个**带有独立上下文、独立工具集、独立系统提示**的专用 AI worker。
+主要价值:
+
+- **Preserve context(保护上下文)**:把"探索/搜索"和"实现"分开,噪音不污染主对话
+- **Enforce constraints(约束)**:限制它能用的工具(如只读)
+- **Reuse(复用)**:用户级 subagent 可跨所有项目
+- **Specialize(专业化)**:领域专用系统提示
+- **Control costs(控本)**:把简单任务路由到更快/更便宜的模型(如 Haiku)
+
+### 1.2 配置文件格式
+
+YAML frontmatter + Markdown 正文:
+
+```markdown
+---
+name: code-reviewer              # 必需,小写+连字符,唯一标识
+description: Reviews code for quality and best practices   # 必需,Claude 据此决定何时委托
+tools: Read, Glob, Grep          # 可选,允许列表;省略则继承全部工具
+model: sonnet                    # 可选: sonnet/opus/haiku/fable/完整ID/inherit(默认)
+---
+
+You are a code reviewer. When invoked, analyze the code and provide
+specific, actionable feedback on quality, security, and best practices.
+```
+
+**常用 frontmatter 字段速查:**
+
+| 字段 | 必需 | 作用 |
+|------|:---:|------|
+| `name` | ✅ | 唯一标识(小写+连字符) |
+| `description` | ✅ | Claude 何时委托给它 |
+| `tools` | | 工具允许列表(省略=继承全部) |
+| `disallowedTools` | | 工具拒绝列表 |
+| `model` | | `sonnet`/`opus`/`haiku`/`fable`/`inherit` |
+| `permissionMode` | | `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan` |
+| `maxTurns` | | 最大代理轮数 |
+| `skills` | | 启动时预加载的技能 |
+| `memory` | | 持久内存作用域 `user`/`project`/`local` |
+| `background` | | `true` = 作为后台任务运行 |
+| `isolation` | | `worktree` = 在隔离的 git worktree 中运行 |
+| `effort` | | `low`/`medium`/`high`/`xhigh`/`max` |
+| `color` | | 任务列表中的显示颜色 |
+
+### 1.3 存放位置与优先级
+
+```mermaid
+flowchart TD
+    subgraph 优先级从高到低
+    A["1️⃣ Managed settings<br/>(组织级,最高)"]
+    B["2️⃣ --agents CLI flag<br/>(仅当前会话,JSON)"]
+    C["3️⃣ .claude/agents/<br/>(项目级,可入版本控制供团队共享)"]
+    D["4️⃣ ~/.claude/agents/<br/>(用户级,跨所有项目)"]
+    E["5️⃣ Plugin 的 agents/<br/>(最低)"]
+    end
+    A --> B --> C --> D --> E
+    F["⚠️ 同名时:<br/>优先级最高的定义生效"] -.-> A
+
+    style A fill:#ff9b9b
+    style C fill:#cfe8ff
+    style D fill:#d8f5d0
+```
+
+> 两个作用域都会**递归扫描**,支持子文件夹(如 `agents/review/`),但身份只由 `name` 决定。
+
+### 1.4 创建 → 调用 → 执行 全流程
+
+```mermaid
+flowchart TD
+    Start([需要一个专用 worker]) --> Create{如何创建?}
+
+    Create -->|交互式,推荐| C1["/agents 命令<br/>填 name/description/tools/model/prompt<br/>✅ 立即生效"]
+    Create -->|手动| C2["在 .claude/agents/ 或<br/>~/.claude/agents/ 写 .md 文件<br/>⚠️ 需重启会话生效"]
+    Create -->|临时| C3["claude --agents '{JSON}'<br/>仅本会话,不落盘"]
+
+    C1 & C2 & C3 --> Invoke{如何调用?}
+
+    Invoke -->|自动委托| I1["自然语言:<br/>'Use the code-reviewer subagent...'"]
+    Invoke -->|保证运行| I2["@-mention:<br/>@agent-code-reviewer ..."]
+    Invoke -->|整个会话| I3["claude --agent code-reviewer<br/>或 settings.json 设 agent 字段"]
+
+    I1 & I2 & I3 --> Launch[启动:获得全新上下文窗口]
+
+    Launch --> Ctx["加载:系统提示 + CLAUDE.md<br/>+ git 状态 + 预加载技能<br/>+ Claude 写的委托消息"]
+    Ctx --> Exec["执行:独立权限/工具/模型<br/>从主对话的工作目录开始"]
+    Exec --> Ret["仅顶级 subagent 的<br/>摘要返回主对话"]
+    Ret --> End([完成])
+
+    style C1 fill:#d8f5d0
+    style I2 fill:#cfe8ff
+    style Launch fill:#fff3c4
+```
+
+### 1.5 前台 vs 后台 vs 嵌套
+
+```mermaid
+flowchart LR
+    subgraph 前台默认
+    F["阻塞主对话<br/>权限提示立即显示"]
+    end
+    subgraph 后台
+    B["并发运行,用户继续工作<br/>权限提示在主会话显示<br/>触发: '后台运行' / Ctrl+B"]
+    end
+    subgraph 嵌套 v2.1.172+
+    N["Subagent 可生成自己的 subagent<br/>最多 5 级深度<br/>仅顶级摘要回主对话"]
+    end
+```
+
+### 1.6 示例:只读代码审查员
+
+```markdown
+---
+name: code-reviewer
+description: Expert code review specialist. Proactively reviews code for quality, security, and maintainability.
+tools: Read, Grep, Glob, Bash
+model: inherit
+---
+
+You are a senior code reviewer ensuring high standards of code quality and security.
+
+When invoked:
+1. Run git diff to see recent changes
+2. Focus on modified files
+3. Begin review immediately
+
+Review checklist:
+- Code is clear and readable
+- No duplicated code / proper error handling
+- No exposed secrets / input validation implemented
+```
+
+---
+
+## 2. Agent View(代理视图)
+
+### 2.1 它是什么
+
+一个统一的**终端界面**,用来管理多个 Claude Code **后台会话**:同时监控多个独立任务(修 bug、审 PR、查测试),整体掌握状态,**仅在需要时介入**。
+
+特点:后台会话持续运行(无需终端常开)、worktree 隔离、可恢复(resume)、每个会话**独立消耗配额**。
+
+### 2.2 架构:Supervisor 托管模型
+
+```mermaid
+flowchart TD
+    User["用户终端<br/>claude agents"] <--> UI["Agent View UI<br/>(表格界面)"]
+    UI <--> Sup["Supervisor 进程<br/>(每用户一个 daemon<br/>独立于终端)"]
+    Sup --> J1["Job 1<br/>Worker"]
+    Sup --> J2["Job 2<br/>Worker"]
+    Sup --> J3["Job 3<br/>Worker"]
+    J1 & J2 & J3 --> Store[("~/.claude/jobs/&lt;id&gt;/<br/>state.json / transcripts / worktrees")]
+    Sup -.->|维持预热 worker| Warm["⚡ dispatch 时秒启动"]
+
+    style Sup fill:#fff3c4
+    style Store fill:#e8e8e8
+```
+
+### 2.3 会话状态机
+
+```mermaid
+stateDiagram-v2
+    [*] --> Working: dispatch
+    Working --> NeedsInput: 等待问题/权限决策 🟡
+    NeedsInput --> Working: 用户 reply
+    Working --> Completed: 成功 🟢
+    Working --> Failed: 出错 🔴
+    Working --> Idle: 无事可做(暗淡)
+    Idle --> Working: 新 prompt
+    Working --> Stopped: Ctrl+X / claude stop 🩶
+    Stopped --> Working: attach/peek 自动重启
+    Completed --> [*]: 关闭 >5min 自动清理
+```
+
+> 进程符号:`✻`/`✽` = 进程活跃秒回;`∙` = 进程已退但可 peek/reply 恢复;`✢` = `/loop` 会话。
+
+### 2.4 核心交互:Peek / Reply / Attach
+
+```mermaid
+flowchart TD
+    AV["Agent View 列表<br/>(按状态分组:Pinned/Ready for review<br/>/Needs input/Working/Completed)"]
+
+    AV -->|Space| Peek["👁 Peek 面板<br/>看会话需要啥/最新输出/PR<br/>可直接输入 reply 回车(无需 attach)"]
+    AV -->|Enter 或 →| Attach["🔗 Attach<br/>全屏完整交互式会话"]
+    Attach -->|← 空 prompt 或 Ctrl+Z| AV
+    Peek -->|Space| AV
+
+    AV -->|底部输入框| Dispatch["🚀 Dispatch 新会话"]
+
+    style Peek fill:#cfe8ff
+    style Attach fill:#d8f5d0
+    style Dispatch fill:#ffe7cf
+```
+
+**关键快捷键速查:**
+
+| 键 | 作用 | 键 | 作用 |
+|----|------|----|------|
+| `↑`/`↓` | 行间移动 | `Ctrl+T` | 固定/取消固定 |
+| `Space` | 开关 peek | `Ctrl+R` | 重命名 |
+| `Enter`/`→` | attach | `Ctrl+X` | 停止(2s 内再按删除) |
+| `←` | detach | `Ctrl+S` | 按目录分组 |
+| `Alt+1..9` | 快速 attach | `?` | 显示全部快捷键 |
+
+### 2.5 三种分派(dispatch)新会话的方式
+
+```mermaid
+flowchart LR
+    subgraph 从 Agent View
+    A1["底部输入框输入 prompt + Enter<br/>code-reviewer look at PR 123<br/>! pytest -x (后台 shell)<br/>/model opus (设分派模型)"]
+    end
+    subgraph 从会话内部
+    A2["/bg 移至后台<br/>/bg continue fixing bugs"]
+    end
+    subgraph 从 Shell
+    A3["claude --bg 'investigate flaky test'<br/>claude --agent X --bg '...'<br/>claude --bg --name 'fix' '...'"]
+    end
+```
+
+**会话管理 shell 命令:**
+
+```bash
+claude agents              # 打开 agent view
+claude agents --json       # JSON 导出(状态: working/blocked/done/failed/stopped)
+claude attach <id>         # attach 到会话
+claude logs <id>           # 打印最近输出
+claude stop <id>           # 停止(别名 claude kill)
+claude respawn <id>        # 重启(保留对话)
+claude rm <id>             # 移除会话
+```
+
+### 2.6 过滤语法
+
+在分派输入框输入即可过滤列表:
+
+| 输入 | 显示 |
+|------|------|
+| `a:<name>` | 运行某命名 agent 的会话 |
+| `s:working` / `s:blocked` | 特定状态的会话 |
+| `#1234` 或 PR URL | 处理该 PR 的会话 |
+
+> ⚠️ **配额提醒**:并行会话各自独立消耗订阅配额(10 个会话 ≈ 10 倍消耗);后台会话运行在**本机**,关机即停。
+
+---
+
+## 3. 运行代理团队(Agent Teams)
+
+### 3.1 它是什么 / 与 Subagent 的本质区别
+
+一个主会话当**队长(Team Lead)**,协调若干独立的**队员会话(Teammates)**。
+**关键差异**:Agent Teams 的队员之间可以**直接互相沟通**,不只是向队长汇报。
+
+> 实验性功能,需在 **Claude Code 的 `settings.json`** 里开启 —— 用户级 `~/.claude/settings.json`(所有项目生效)或项目级 `.claude/settings.json`(仅本项目),加入:
+> ```json
+> { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
+> ```
+> 等价写法:在 shell 里 `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 后再启动 `claude`(仅当前 shell 生效)。
+
+> 💡 **召唤与交互速查:**
+> ① 开开关(上面那行写进 settings.json 或 `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+> ② 自然语言组队:`Spawn 3 teammates to review PR #142:一个看安全、一个看性能、一个验证测试`
+> ③ 让队员套用某 subagent 定义:`Spawn a teammate using the security-reviewer agent type to ...`
+> ④ 交互(默认 in-process):`↑/↓` 选队员 · `Enter` 进入看输出/发消息 · `Esc` 中止 · `x` 关闭 · `Ctrl+T` 切任务清单
+> ⑤ 关掉某队员:`让 researcher 这个队员关闭`
+
+### 3.2 架构图
+
+```mermaid
+flowchart TD
+    Lead["👑 Team Lead<br/>(主会话)<br/>生成队员/分配任务/综合结果"]
+
+    Lead --> T1["🤖 Teammate 1<br/>(独立上下文)"]
+    Lead --> T2["🤖 Teammate 2<br/>(独立上下文)"]
+    Lead --> T3["🤖 Teammate 3<br/>(独立上下文)"]
+
+    T1 <-->|P2P 直接消息| T2
+    T2 <-->|P2P 直接消息| T3
+    T1 <-->|P2P 直接消息| T3
+
+    T1 & T2 & T3 --> Task[("📋 共享任务清单<br/>文件锁防竞态<br/>~/.claude/tasks/{team}/")]
+    Lead --> Cfg[("⚙️ ~/.claude/teams/{team}/config.json")]
+    T1 & T2 & T3 -.->|消息自动投递| Lead
+
+    style Lead fill:#fff3c4
+    style Task fill:#d8f5d0
+```
+
+### 3.3 适用 vs 不适用
+
+```mermaid
+flowchart LR
+    subgraph "适合 ✅"
+    G1[多角度研究/代码审查]
+    G2[多模块并行开发<br/>各队员拥有不同模块]
+    G3[并行调试<br/>同时验证多个假设]
+    G4[跨层协调<br/>前端/后端/测试各一人]
+    end
+    subgraph "不适合 ❌"
+    B1[顺序任务]
+    B2[反复编辑同一文件]
+    B3[高度依赖的工作]
+    end
+    style G1 fill:#d8f5d0
+    style B1 fill:#ffd0d0
+```
+
+### 3.4 完整生命周期
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant L as 队长 (Lead)
+    participant T as 队员们 (Teammates)
+    participant TL as 共享任务清单
+
+    U->>L: 自然语言指令<br/>"生成3个队员从不同角度探索..."
+    L->>L: 解析需求,决定队员数量与角色
+    L->>T: 生成队伍(加载 CLAUDE.md/MCP/skills + spawn prompt)
+    L->>TL: 创建任务清单
+    loop 并行执行
+        T->>TL: claim 任务(文件锁)
+        T->>T: 独立执行
+        T-->>T: 队员间 P2P 讨论/互相质疑
+        T->>TL: 标记完成
+        TL-->>TL: 自动解析依赖,解锁后续任务
+        T-->>L: 消息自动投递(无需轮询)
+    end
+    T->>L: 汇总发现
+    L->>U: 综合结果
+    Note over L,T: 会话结束自动清理 teams/<br/>tasks/ 保留供恢复
+```
+
+### 3.5 进阶特性
+
+**① 计划审批模式(Plan Approval)**
+
+```mermaid
+flowchart LR
+    A["队员完成计划"] --> B["发送审批请求给队长"]
+    B --> C{队长审批}
+    C -->|批准| D["进入实现模式"]
+    C -->|拒绝| E["保持计划模式<br/>按反馈修订 → 重新提交"]
+    E --> B
+    style D fill:#d8f5d0
+    style E fill:#ffe7cf
+```
+
+**② 用 Subagent 定义作为队员**:`"Spawn a teammate using the security-reviewer agent type..."` — 队员遵守该定义的 `tools` 允许列表和 `model`。
+
+**③ 用 Hook 强制质量门**:`TeammateIdle` / `TaskCreated` / `TaskCompleted`;Hook 返回码 `2` = 阻止 + 反馈给队员继续干。
+
+### 3.6 显示模式
+
+| 模式 | 说明 |
+|------|------|
+| `in-process` | 全部队员在主终端(默认),`↑↓` 选队员,`Enter` 查看/交互 |
+| `auto` | 在 tmux/iTerm2 内则分屏,否则 in-process |
+| `tmux` / `iterm2` | 强制对应分屏 |
+
+交互键:`↑/↓` 选队员、`Enter` 看 transcript 发消息、`Escape` 中止其任务、`x` 关闭、`Ctrl+T` 切任务清单。
+
+**默认视图示例:它属于哪种模式?**
+
+当你直接 `claude` 启动 —— 没设 `teammateMode`、也不在 tmux / iTerm2 里 —— 默认就是 **`in-process`** 模式:所有队员都挤在你**当前这一个终端窗口**内,不另开窗格。
+
+```text
+$ claude
+> Spawn 2 teammates to refactor the auth and billing modules in parallel.
+```
+
+此时终端底部出现队员列表,你用 `↑/↓` 在「队长 + 2 个队员」之间切换,`Enter` 进入某队员看实时输出、发消息,`Esc` 退回。全程不离开这一个终端 —— 这就是 `in-process`(默认)体验。
+
+```mermaid
+flowchart TD
+    Start["$ claude(默认启动)"] --> Q{"设了 teammateMode?<br/>或在 tmux/iTerm2 里?"}
+    Q -->|否,都没有| IP["✅ in-process(默认)<br/>队员内嵌在同一终端<br/>↑↓ 切换 · Enter 进入"]
+    Q -->|auto 且在 tmux/iTerm2| SP["分屏:每个队员独立窗格"]
+    Q -->|强制 tmux / iterm2| SP
+
+    style IP fill:#d8f5d0
+    style SP fill:#cfe8ff
+```
+
+> 一句话:**默认视图 = `in-process`**。只有当你显式设 `teammateMode: auto/tmux/iterm2` 且终端支持分屏时,才会切到分屏视图。
+
+### 3.7 示例
+
+```text
+# 并行代码审查
+Spawn three teammates to review PR #142:
+- One focused on security implications
+- One checking performance impact
+- One validating test coverage
+
+# 科学辩论式调试
+Users report the app exits after one message. Spawn 5 teammates to investigate
+different hypotheses. Have them talk to each other to disprove each other's
+theories, like a scientific debate. Update the findings doc with the consensus.
+```
+
+---
+
+## 4. 动态工作流(Dynamic Workflows)
+
+### 4.1 它是什么
+
+一段由 **Claude 为你的任务现写的 JavaScript 脚本**,交给运行时在**后台隔离环境**执行。中间结果存在**脚本变量**里(而非塞进 Claude 上下文),因此能编排**几十到几百个 agent**。
+
+**核心差异**:Subagents/Skills 是 Claude 逐轮决定下一步;**Workflows 是脚本决定流程**,Claude 只当"执行者"。
+
+> 前置:Claude Code v2.1.154+、付费计划、已启用 API/Bedrock/Vertex/Foundry;在 `/config` 启用。
+
+### 4.2 执行模型
+
+```mermaid
+flowchart TD
+    S["会话(保持响应)<br/>可继续输入/看进度"] -.->|脱离上下文| RT
+
+    subgraph RT["运行时(后台隔离执行)"]
+    direction TB
+    P["跟踪脚本进度"]
+    C["缓存已完成结果"]
+    V["中间结果存脚本变量"]
+    L["约束:<br/>≤16 并发 agent<br/>≤1000 agent/run<br/>无中途用户输入"]
+    end
+
+    RT --> Agents["生成 N 个 agent 执行任务"]
+    Agents --> Report["带源引用的报告 → 返回会话"]
+
+    style S fill:#cfe8ff
+    style RT fill:#fff3c4
+    style Report fill:#d8f5d0
+```
+
+### 4.3 触发方式
+
+```mermaid
+flowchart LR
+    A["内置工作流<br/>/deep-research &lt;问题&gt;"] --> Run
+    B["ultracode 关键字<br/>ultracode: audit every endpoint..."] --> Run
+    C["Ultracode 模式<br/>/effort ultracode<br/>(每个实质任务自动规划)"] --> Run
+    D["保存的工作流<br/>/&lt;workflow-name&gt;"] --> Run
+    Run["运行"]
+    style A fill:#d8f5d0
+```
+
+### 4.4 从触发到报告的完整流程
+
+```mermaid
+flowchart TD
+    T([用户触发]) --> Gen{内置工作流?}
+    Gen -->|否| Write["Claude 分析任务<br/>设计多个 phase<br/>编写 JS 脚本"]
+    Gen -->|是| Approve
+    Write --> Approve{批准对话框}
+
+    Approve -->|Yes, run it| Exec
+    Approve -->|View raw script Ctrl+G| Approve
+    Approve -->|No| Cancel([取消])
+
+    Exec["运行时后台执行<br/>(会话保持响应)"]
+
+    Exec --> Ph1["Phase 1: 发现/调查<br/>生成 agent(≤16 并发)<br/>结果存脚本变量"]
+    Ph1 --> Ph2["Phase 2: 交叉验证<br/>用 Phase 1 结果生成验证 agent"]
+    Ph2 --> PhN["Phase N: 综合"]
+    PhN --> Done["报告(带源引用)返回会话"]
+
+    style Approve fill:#fff3c4
+    style Done fill:#d8f5d0
+```
+
+### 4.5 典型脚本骨架(Claude 自动生成)
+
+```javascript
+// 每个 workflow 脚本以 meta 开头(纯字面量)
+export const meta = {
+  name: 'investigate-and-verify',
+  description: '调查一批目标,再交叉验证',
+  phases: [{ title: '调查' }, { title: '验证' }],
+};
+
+// Phase 1: 初始调查 —— parallel 并发扇出,结果存脚本变量(不进 Claude 上下文)
+phase('调查');
+const results = await parallel(
+  targets.map(t => () => agent(`Investigate ${t}...`))
+);
+
+// Phase 2: 交叉验证 —— 对每条结论再派一个 agent
+phase('验证');
+const verified = [];
+for (const claim of results.filter(Boolean)) {
+  const v = await agent(`Cross-check: ${claim}. 返回 REAL 或 FALSE`);
+  if (v.includes('REAL')) verified.push(claim);
+}
+
+// 返回值回到会话
+return { verified };
+```
+
+> 核心编排原语:`agent()`(派单个 agent)、`parallel()`(并发一批、栅栏等齐)、`pipeline()`(流水线,各 item 独立穿过所有 stage、无栅栏)、`phase()`/`log()`(分组与进度)。
+
+### 4.6 监控与控制(`/workflows`)
+
+```mermaid
+flowchart TD
+    A["/workflows"] --> B["↑↓ 选择 run → Enter 打开进度视图"]
+    B --> C["每个 phase 显示:<br/>agent 数 / token 总量 / 耗时"]
+    C --> D["→ 钻入 phase → 钻入 agent<br/>看 prompt / 最近工具调用 / 结果"]
+    D --> E["控制键:<br/>p 暂停/恢复 · x 停止 · r 重启 agent<br/>f 过滤 · s 保存脚本为命令"]
+    style E fill:#cfe8ff
+```
+
+### 4.7 保存与复用(传参)
+
+```mermaid
+flowchart LR
+    A["/workflows 选完成的 run"] -->|按 s| B{保存位置}
+    B -->|项目共享| C[".claude/workflows/"]
+    B -->|个人全局| D["~/.claude/workflows/"]
+    C & D --> E["以后用 /&lt;workflow-name&gt; 运行"]
+    E --> F["传参:Run /triage-issues on issues 1024, 1025<br/>脚本内通过全局 args 接收"]
+    style E fill:#d8f5d0
+```
+
+### 4.8 约束与成本
+
+| 约束 | 原因 |
+|------|------|
+| 无中途用户输入 | 只有权限提示能暂停;需签字权就分阶段跑 |
+| 脚本无文件系统/shell | agent 负责读写/跑命令,脚本只负责编排 |
+| ≤16 并发 agent | 限制本地资源 |
+| ≤1000 agent/run | 防止失控循环 |
+
+- 可恢复性:**同一会话内**暂停后恢复(完成的 agent 走缓存);**跨会话不可恢复**。
+- 脚本落盘在 `~/.claude/projects/{session-id}/`,可读取/diff/编辑后重启。
+- 关闭功能:`settings.json` 设 `"disableWorkflows": true` 或环境变量 `CLAUDE_CODE_DISABLE_WORKFLOWS=1`。
+- 控本建议:先在**一个目录**而非整个仓库小规模试跑;`/workflows` 显示每个 agent 的 token 用量;可随时停止而不丢已完成工作。
+
+---
+
+## 5. 使用 Worktrees 隔离会话
+
+### 5.1 什么是 / 为什么
+
+**Git worktree** = 一个独立工作目录,有自己的文件和分支,但**与主检出共享同一仓库历史和远程**。
+**目的**:多个 Claude Code 会话各在独立 worktree 工作,代码编辑**互不碰撞** —— 一个终端建功能,另一个修 bug,完全隔离。它是前面 Agent View / Teams / Workflows 并行的**底层基建**。
+
+```mermaid
+flowchart TD
+    Repo[(共享仓库历史 + 远程 origin)]
+    Repo --> Main["主检出<br/>(main 分支)"]
+    Repo --> W1[".claude/worktrees/feature-auth<br/>分支 worktree-feature-auth"]
+    Repo --> W2[".claude/worktrees/bugfix-123<br/>分支 worktree-bugfix-123"]
+    Main -.->|独立文件| S0["会话 0"]
+    W1 -.->|独立文件| S1["会话 1 建功能"]
+    W2 -.->|独立文件| S2["会话 2 修 bug"]
+    style Repo fill:#e8e8e8
+    style W1 fill:#cfe8ff
+    style W2 fill:#ffe7cf
+```
+
+### 5.2 四种创建方式
+
+```mermaid
+flowchart TD
+    A{创建 worktree} --> M1["① claude --worktree [name]<br/>自动建 .claude/worktrees/&lt;name&gt;/<br/>分支 worktree-&lt;name&gt;,基于 origin/HEAD"]
+    A --> M2["② 从 PR:claude --worktree '#1234'<br/>拉 pull/1234/head<br/>→ .claude/worktrees/pr-1234"]
+    A --> M3["③ 会话中途:对 Claude 说 'work in a worktree'<br/>→ Claude 调 EnterWorktree 工具"]
+    A --> M4["④ 手动:git worktree add ../proj-feat -b feat<br/>cd ../proj-feat && claude"]
+    style M1 fill:#d8f5d0
+```
+
+### 5.3 并行开发完整流程
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant T1 as 终端1
+    participant T2 as 终端2
+    participant G as Git 仓库
+
+    Note over U,G: 首次使用需接受工作区信任对话
+    U->>T1: claude --worktree feature-auth
+    T1->>G: 建 .claude/worktrees/feature-auth/
+    U->>T2: claude --worktree bugfix-123
+    T2->>G: 建 .claude/worktrees/bugfix-123/
+    par 并行无冲突
+        T1->>T1: 编辑 auth 模块
+    and
+        T2->>T2: 编辑 bugfix 代码
+    end
+    U->>G: git worktree list (查看全部)
+    Note over T1,T2: 会话结束 → 见清理规则
+```
+
+### 5.4 清理决策
+
+```mermaid
+flowchart TD
+    End([会话结束]) --> Q{有未提交更改/<br/>未跟踪文件/新提交?}
+    Q -->|无| Auto["✅ 自动删除 worktree 和分支"]
+    Q -->|有| Named{是命名会话?}
+    Named -->|是/有改动| Prompt["❓ Claude 提示:保留 or 删除"]
+    Prompt -->|保留| Keep["留在磁盘,可稍后返回"]
+    Prompt -->|删除| Del["删除"]
+    Q -->|非交互 -p 运行| NoClean["不自动清理"]
+
+    Manual["手动清理:<br/>git worktree remove &lt;path&gt;<br/>--force 含未提交更改"] -.-> End
+
+    style Auto fill:#d8f5d0
+    style Prompt fill:#fff3c4
+    style Keep fill:#cfe8ff
+```
+
+### 5.5 必备配置与最佳实践
+
+**① `.worktreeinclude` —— 自动带上 gitignored 的本地文件**
+
+worktree 是全新检出,`.env` 等不会自动出现。在项目根建 `.worktreeinclude`(用 `.gitignore` 语法):
+
+```text
+.env
+.env.local
+config/secrets.json
+```
+> 规则:只有**同时匹配模式 AND 被 gitignore** 的文件才复制;被跟踪的文件永不复制。
+
+**② 把 worktree 目录排除出主检出**
+```bash
+echo ".claude/worktrees/" >> .gitignore
+```
+
+**③ 子代理隔离** —— frontmatter 里写 `isolation: worktree`,子代理在自己的 worktree 跑,完成且无改动则自动删。
+
+**④ 基础分支** —— 默认从 `origin/HEAD`(fresh);要从本地 HEAD:
+```json
+{ "worktree": { "baseRef": "head" } }
+```
+
+**⑤ 新 worktree 要重装依赖** —— `npm install` / `pip install` 等需在每个新 worktree 重跑。
+
+### 5.6 ⚠️ 重要限制:只隔离文件
+
+```mermaid
+flowchart LR
+    W["Worktree"] -->|✅ 隔离| F["文件 / 分支"]
+    W -->|❌ 不隔离| DB["数据库"]
+    W -->|❌ 不隔离| Env["环境变量"]
+    W -->|❌ 不隔离| Svc["运行中的服务/端口"]
+    note["这些需手动协调,<br/>否则两会话对同库跑迁移会冲突"]
+    DB & Env & Svc -.-> note
+    style F fill:#d8f5d0
+    style DB fill:#ffd0d0
+    style Env fill:#ffd0d0
+    style Svc fill:#ffd0d0
+```
+
+> 非 Git 系统(SVN/Perforce/Mercurial):用 `WorktreeCreate` / `WorktreeRemove` Hook 自定义,此时 `.worktreeinclude` 不生效,需在 Hook 脚本内手动复制文件。
+
+---
+
+## 6. 实战场景:两种角色视角
+
+前面讲的五种机制有点抽象。这一节用**算法工程师**和**量化/托管交易开发者**两个真实角色,把它们落到具体工作流上。先看一张「同一套机制,两种角色怎么用」的对照:
+
+```mermaid
+flowchart LR
+    subgraph M[五种机制]
+    direction TB
+    S[Subagent]
+    AT[Agent Teams]
+    WF[Dynamic Workflow]
+    WT[Worktrees]
+    AV[Agent View]
+    end
+
+    S -.->|只读探索| E1["🧠 算法工程师<br/>data-explorer 分析数据集"]
+    WF -.->|批量扇出| E2["🧠 超参/特征网格搜索<br/>几百个实验汇总 leaderboard"]
+    WT -.->|实验隔离| E3["🧠 每个实验独立分支<br/>互不覆盖"]
+
+    S -.->|沙箱只读| T1["📈 交易开发者<br/>backtest-runner 历史回测"]
+    WF -.->|批量扇出| T2["📈 参数寻优<br/>几百组回测算夏普/回撤"]
+    AT -.->|对等协作| T3["📈 多策略并行开发<br/>动量/均值回归/套利"]
+
+    style E1 fill:#cfe8ff
+    style E2 fill:#cfe8ff
+    style E3 fill:#cfe8ff
+    style T1 fill:#d8f5d0
+    style T2 fill:#d8f5d0
+    style T3 fill:#d8f5d0
+```
+
+---
+
+### 6.1 算法工程师 / ML Engineer 视角
+
+**日常**:数据探索 → 特征工程 → 训练 → 评估 → 调参 → 跑 ablation → 复现 paper。
+**痛点**:实验多、训练久、改代码容易互相覆盖、日志/数据把主对话上下文撑爆。
+
+**机制映射:**
+
+| 需求 | 用什么 | 怎么做 |
+|------|--------|--------|
+| 只读分析数据集/日志,不污染主线 | **Subagent** | `data-explorer`(`tools: Read,Bash,Grep`,`model: haiku` 省钱) |
+| 几十上百组超参/特征扫描 | **Dynamic Workflow** | 每组一个 agent,≤16 并发,汇总 leaderboard |
+| 多人并行做不同实验方向 | **Agent Teams** | 队员各管:数据增强 / 架构 / 损失函数,互相对比 |
+| 每个实验代码隔离不互相覆盖 | **Worktrees** | `isolation: worktree`,一实验一分支 |
+| 盯多个长跑训练 | **Agent View** | `claude agents`,完成/失败一目了然 |
+| 复现论文 | **Subagent** | `paper-reader`(WebFetch)+ repro agent |
+
+**端到端:一次「把模型 AUC 从 0.82 提到 0.85」的调参实验**
+
+```mermaid
+flowchart TD
+    Goal["🎯 目标:AUC 0.82 → 0.85"] --> WF["用 Dynamic Workflow 编排"]
+    WF --> P1["Phase 1 发现<br/>列出 5 组特征集 × 超参组合"]
+    P1 --> P2["Phase 2 并行实验<br/>每个 agent 在独立 worktree<br/>train + eval(≤16 并发)"]
+    P2 --> P3["Phase 3 汇总<br/>按 AUC 排序成 leaderboard"]
+    P3 --> P4["Phase 4 验证<br/>对 Top 3 跑 5-fold 交叉验证"]
+    P4 --> Pick{人工选最优}
+    Pick -->|满意| Merge["合并该 worktree 分支 → 收工 ✅"]
+    Pick -->|还差点| WF
+
+    style Goal fill:#fff3c4
+    style P2 fill:#cfe8ff
+    style Merge fill:#d8f5d0
+```
+
+**示例 ① 只读数据探索 subagent**(`.claude/agents/data-explorer.md`)
+
+```markdown
+---
+name: data-explorer
+description: 只读探索数据集,输出分布/缺失/异常报告,不改任何文件
+tools: Read, Bash, Grep, Glob
+model: haiku
+---
+你是数据分析助手。被调用时:加载数据(pandas)、输出 shape/dtypes/
+缺失率/目标分布/明显异常,并给出特征工程建议。绝不修改数据或代码。
+```
+
+**示例 ② 一句话触发网格搜索工作流**
+
+```text
+ultracode: 对 src/features 下 5 组特征集 × {lr, max_depth, n_estimators} 网格,
+各训练 LightGBM 并在验证集报 AUC,汇总成 leaderboard,Top3 再跑 5-fold 验证
+```
+
+**示例 ③ 实验隔离**(两个实验互不覆盖代码)
+
+```bash
+claude --worktree exp-focal-loss      # 实验A:换损失函数
+claude --worktree exp-feature-v2      # 实验B:新特征
+```
+
+---
+
+### 6.2 量化策略 / 托管交易系统开发者 视角
+
+> ⚠️ **重要前提**:这里讲的是用 Claude Code **开发与回测交易系统的软件工程**,**不是投资建议**。
+> - 实盘下单必须**人工把关**(plan 模式 + 风控 Hook),Claude 不应在无人审批下自动下真实订单;
+> - **回测表现 ≠ 实盘收益**,警惕过拟合;市场有风险,盈亏自负。
+
+**日常**:抓数据 → 写策略 → 回测 → 参数寻优 → 风控 → 模拟盘 → (人工把关下)实盘监控。
+
+**机制映射:**
+
+| 需求 | 用什么 | 怎么做 |
+|------|--------|--------|
+| 只读历史回测,绝不碰实盘 | **Subagent** | `backtest-runner`(工具限只读 + 回测引擎) |
+| 一个策略扫几百组参数(止损/仓位/周期) | **Dynamic Workflow** | 扇出回测,汇总夏普/最大回撤/胜率 |
+| 并行开发多种策略 | **Agent Teams** | 队员各做动量/均值回归/套利,互相 code review |
+| 每个策略分支隔离 | **Worktrees** | 一策略一 worktree |
+| 盯多个回测/数据管道 | **Agent View** | `claude agents` |
+| **实盘下单红线** | **permissionMode: plan + Hook** | 真实下单先出计划审批,风控 hook 拦截 |
+
+**端到端:策略从开发到上线,带三道安全闸**
+
+```mermaid
+flowchart TD
+    subgraph DEV["① 开发 + 回测 —— 安全区(只读/沙箱)"]
+    direction TB
+    A["Agent Teams:多策略并行开发"] --> B["backtest-runner subagent<br/>历史数据回测"]
+    B --> C["Dynamic Workflow 参数寻优<br/>几百组回测 → 夏普/回撤/胜率 leaderboard"]
+    C --> D["walk-forward / 样本外验证"]
+    end
+
+    D --> Gate1{"🔍 人工评审<br/>过拟合? 风险可控?"}
+    Gate1 -->|否| A
+    Gate1 -->|是| PAPER["② 模拟盘 paper trading<br/>(纸面验证,不动真钱)"]
+    PAPER --> Gate2{"📊 模拟盘达标?"}
+    Gate2 -->|否| A
+
+    Gate2 -->|是| LIVE
+    subgraph LIVE["③ 实盘 —— 高风险,人工把关"]
+    direction TB
+    R1["permissionMode: plan<br/>下单前必须先出计划"] --> R2["风控 Hook 拦截:<br/>超仓位/超回撤/异常价 → 阻止"]
+    R2 --> R3["✋ 人工审批每笔 / 每日额度"]
+    end
+
+    style DEV fill:#eef7ff
+    style LIVE fill:#fff0f0
+    style Gate1 fill:#fff3c4
+    style Gate2 fill:#fff3c4
+    style R3 fill:#ffd0d0
+```
+
+**示例 ① 只读回测 subagent**(`.claude/agents/backtest-runner.md`)
+
+```markdown
+---
+name: backtest-runner
+description: 只读历史数据回测策略,输出绩效指标,绝不触碰实盘接口
+tools: Read, Bash, Glob
+permissionMode: plan
+---
+你是回测工程师。只在历史数据上回测,输出年化/夏普/最大回撤/胜率/换手率。
+严禁调用任何下单或交易 API。一旦发现策略代码调用实盘接口,立即停止并报告。
+```
+
+**示例 ② 风控闸 —— 用 Hook 拦截实盘下单**(`.claude/settings.json` 概念示例)
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "./scripts/block-live-orders.sh" }] }
+    ]
+  }
+}
+```
+
+> `block-live-orders.sh` 检测命令里是否含 `place_order` / `submit` / `live` 等关键字,
+> 命中则返回码 `2` 拦截并提示「实盘下单需人工执行」。
+
+**示例 ③ 多策略并行开发(Agent Teams)**
+
+```text
+Spawn 3 teammates to develop and backtest three strategies in parallel:
+- 动量(momentum)  - 均值回归(mean-reversion)  - 跨市场套利(arbitrage)
+每人在自己的 worktree 开发,回测完互相 review 对方的过拟合风险,汇总到 findings 文档。
+```
+
+---
+
+## 附录:常用命令速查
+
+```bash
+# —— Subagents ——
+/agents                                  # 交互式创建/管理
+claude --agent code-reviewer             # 整个会话用某 subagent
+claude --agents '{...}'                   # 临时定义(仅本会话)
+
+# —— Agent View ——
+claude agents                            # 打开代理视图
+claude agents --json                     # JSON 导出
+claude attach <id> / logs <id> / stop <id> / respawn <id> / rm <id>
+claude --bg "investigate the flaky test" # 直接后台启动
+
+# —— Agent Teams (实验性) ——
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+claude --teammate-mode auto
+
+# —— Dynamic Workflows ——
+/deep-research <问题>                      # 内置工作流
+ultracode: <任务>                          # 关键字触发
+/effort ultracode                        # 自动规划模式
+/workflows                               # 监控/保存
+
+# —— Worktrees ——
+claude --worktree [name]                 # 隔离会话
+claude --worktree "#1234"                # 从 PR
+git worktree list / remove <path> [--force]
+```
+
+---
+
+*本文基于 Claude Code 官方文档(code.claude.com/docs)整理,具体行为以你所用版本为准。*
+
+</script>
+
+<script>
+(function(){
+  const raw = document.getElementById('md-source').textContent;
+  const content = document.getElementById('content');
+
+  // 1) markdown -> html
+  content.innerHTML = marked.parse(raw);
+
+  // 去掉与 hero 标题重复的第一个 h1
+  const firstH1 = content.querySelector('h1');
+  if (firstH1) firstH1.remove();
+
+  // 按开头 emoji 给引用块上色(⚠️ 警告 / 💡 提示)
+  content.querySelectorAll('blockquote').forEach(bq => {
+    const t = bq.textContent.trim();
+    if (t.startsWith('⚠️') || t.startsWith('注意')) bq.classList.add('cb-warn');
+    else if (t.startsWith('💡')) bq.classList.add('cb-tip');
+  });
+
+  // 2) ```mermaid 代码块 -> 卡片包裹的 <pre class="mermaid">,源码留存供重渲染
+  content.querySelectorAll('code.language-mermaid').forEach(code => {
+    const card = document.createElement('div');
+    card.className = 'diagram';
+    const hint = document.createElement('span');
+    hint.className = 'zoom-hint';
+    hint.textContent = '🔍 点击放大';
+    const pre = document.createElement('pre');
+    pre.className = 'mermaid';
+    pre.dataset.src = code.textContent;
+    pre.textContent = code.textContent;
+    card.appendChild(hint);
+    card.appendChild(pre);
+    code.closest('pre').replaceWith(card);
+  });
+
+  // 3) 锚点 + 侧栏目录
+  const toc = document.getElementById('toc');
+  let n = 0;
+  content.querySelectorAll('h2, h3').forEach(h => {
+    const id = 'sec-' + (n++);
+    h.id = id;
+    const a = document.createElement('a');
+    a.href = '#' + id;
+    a.textContent = h.textContent.replace(/\s+/g,' ').trim();
+    if (h.tagName === 'H3') a.className = 'lvl3';
+    toc.appendChild(a);
+  });
+
+  // 4) mermaid 渲染
+  function renderMermaid(theme){
+    document.querySelectorAll('pre.mermaid').forEach(pre => {
+      pre.removeAttribute('data-processed');
+      pre.innerHTML = pre.dataset.src;
+    });
+    mermaid.initialize({
+      startOnLoad:false, theme:theme, securityLevel:'loose',
+      flowchart:{ htmlLabels:true, curve:'basis', useMaxWidth:true, padding:22, nodeSpacing:55, rankSpacing:60 },
+      themeVariables:{ fontFamily:'"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif' }
+    });
+    return mermaid.run({ querySelector:'pre.mermaid' })
+      .then(bindZoom)
+      .catch(e => console.error('mermaid error', e));
+  }
+
+  // 5) 点击放大
+  const lb = document.getElementById('lightbox');
+  const lbBox = lb.querySelector('.box');
+  function bindZoom(){
+    document.querySelectorAll('.diagram pre.mermaid').forEach(pre => {
+      pre.onclick = () => {
+        const svg = pre.querySelector('svg');
+        if(!svg) return;
+        lbBox.innerHTML = '';
+        lbBox.appendChild(svg.cloneNode(true));
+        lb.classList.add('show');
+      };
+    });
+  }
+  lb.addEventListener('click', () => lb.classList.remove('show'));
+  document.addEventListener('keydown', e => { if(e.key==='Escape') lb.classList.remove('show'); });
+
+  // 6) 主题切换
+  const btn = document.getElementById('themeBtn');
+  function applyTheme(dark){
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    btn.textContent = dark ? '☀️ 亮色' : '🌙 暗色';
+    localStorage.setItem('cc-guide-dark', dark ? '1' : '0');
+    renderMermaid(dark ? 'dark' : 'default');
+  }
+  btn.addEventListener('click', () =>
+    applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
+  const hash = location.hash;
+  applyTheme(hash==='#dark' ? true : hash==='#light' ? false : localStorage.getItem('cc-guide-dark')==='1');
+
+  // 7) 目录高亮 + 进度条
+  const links = [...toc.querySelectorAll('a')];
+  const headings = [...content.querySelectorAll('h2, h3')];
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if(en.isIntersecting){
+        const i = headings.indexOf(en.target);
+        links.forEach(l => l.classList.remove('active'));
+        if(links[i]){ links[i].classList.add('active');
+          links[i].scrollIntoView({block:'nearest'}); }
+      }
+    });
+  }, { rootMargin:'0px 0px -78% 0px' });
+  headings.forEach(h => obs.observe(h));
+
+  const prog = document.getElementById('progress');
+  const toTop = document.getElementById('toTop');
+  toTop.addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+  window.addEventListener('scroll', () => {
+    const st = document.documentElement.scrollTop || document.body.scrollTop;
+    const sh = (document.documentElement.scrollHeight||document.body.scrollHeight) - window.innerHeight;
+    prog.style.width = (sh>0 ? (st/sh*100) : 0) + '%';
+    toTop.classList.toggle('show', st > 600);
+  });
+})();
+</script>
+</body>
+</html>
