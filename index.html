@@ -46,6 +46,9 @@
   #toc a:hover{background:var(--accent-soft); opacity:1;}
   #toc a.lvl3{padding-left:26px; font-size:12.5px; opacity:.62;}
   #toc a.active{background:var(--accent-soft); color:var(--accent); font-weight:600; opacity:1; border-left-color:var(--accent);}
+  #menuToggle{display:none; margin:10px 8px 2px; padding:8px 14px; border:1px solid var(--border);
+    background:var(--card); color:var(--fg); border-radius:8px; font-size:14px; cursor:pointer; align-items:center; gap:6px;}
+  #menuToggle:hover{background:var(--accent-soft);}
   /* 主体 */
   main{flex:1; min-width:0;}
   .wrap{max-width:880px; margin:0 auto; padding:0 56px 140px;}
@@ -115,11 +118,30 @@
   #lightbox svg{max-width:none;}
   #lightbox .close{position:fixed; top:18px; right:24px; color:#fff; font-size:30px; cursor:pointer; opacity:.8;}
   @media(max-width:880px){
+    html,body{overflow-x:hidden;}
     body{flex-direction:column}
-    #toc{position:static; width:100%; min-width:0; height:auto; border-right:none; border-bottom:1px solid var(--border);}
-    .wrap{padding:0 18px 80px;}
-    .hero-inner{padding:0 18px;}
-    #themeBtn{margin-right:18px; right:0;}
+    #toc{position:static; width:100%; min-width:0; height:auto; border-right:none;
+      border-bottom:1px solid var(--border); padding:12px 14px;}
+    #menuToggle{display:inline-flex;}
+    #toc.collapsed .toc-links{display:none;}
+    .toc-links{max-height:55vh; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:6px;}
+    #toc a{padding:9px 10px; font-size:14px;}
+    #toc a.lvl3{padding-left:22px; font-size:13px;}
+    .wrap{padding:0 16px 80px;}
+    .hero{padding-top:36px; padding-bottom:32px;}
+    .hero-inner{padding:0 16px;}
+    .hero h1{font-size:25px;}
+    .hero p{font-size:14.5px;}
+    .hero-meta{gap:7px;}
+    .chip{font-size:11.5px; padding:4px 11px;}
+    #themeBtn{margin-right:14px; right:0; top:16px;}
+    h1{font-size:23px;} h2{font-size:20px;} h3{font-size:16.5px;}
+    p,li{font-size:15px;}
+    .diagram{padding:16px 12px 12px;}
+    .diagram .zoom-hint{position:static; display:inline-block; margin-bottom:8px;}
+    table{font-size:13px;}
+    pre{padding:14px;}
+    #toTop{right:16px; bottom:16px; width:42px; height:42px;}
   }
 </style>
 </head>
@@ -128,6 +150,8 @@
 <nav id="toc">
   <div class="brand"><span class="dot"></span>Claude Code</div>
   <div class="sub">多代理能力 · 可视化指南</div>
+  <button id="menuToggle" aria-label="展开/收起目录">☰ 目录</button>
+  <div class="toc-links"></div>
 </nav>
 <main>
   <header class="hero">
@@ -1185,6 +1209,7 @@ git worktree list / remove <path> [--force]
 
   // 3) 锚点 + 侧栏目录
   const toc = document.getElementById('toc');
+  const tocLinks = document.querySelector('.toc-links');
   let n = 0;
   content.querySelectorAll('h2, h3').forEach(h => {
     const id = 'sec-' + (n++);
@@ -1193,8 +1218,18 @@ git worktree list / remove <path> [--force]
     a.href = '#' + id;
     a.textContent = h.textContent.replace(/\s+/g,' ').trim();
     if (h.tagName === 'H3') a.className = 'lvl3';
-    toc.appendChild(a);
+    tocLinks.appendChild(a);
   });
+
+  // 移动端:目录折叠开关(默认收起,选完自动收回)
+  const menuToggle = document.getElementById('menuToggle');
+  const isMobile = () => window.matchMedia('(max-width:880px)').matches;
+  if (isMobile()) toc.classList.add('collapsed');
+  menuToggle.addEventListener('click', () => toc.classList.toggle('collapsed'));
+  tocLinks.addEventListener('click', e => {
+    if (e.target.tagName === 'A' && isMobile()) toc.classList.add('collapsed');
+  });
+  window.addEventListener('resize', () => { if (!isMobile()) toc.classList.remove('collapsed'); });
 
   // 4) mermaid 渲染
   function renderMermaid(theme){
