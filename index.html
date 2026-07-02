@@ -1226,8 +1226,17 @@ git worktree list / remove <path> [--force]
   const isMobile = () => window.matchMedia('(max-width:880px)').matches;
   if (isMobile()) toc.classList.add('collapsed');
   menuToggle.addEventListener('click', () => toc.classList.toggle('collapsed'));
+  // 点击目录项:先折叠菜单(移动端),等布局回流后再滚到目标 —— 避免折叠导致的高度跳变把定位带偏
   tocLinks.addEventListener('click', e => {
-    if (e.target.tagName === 'A' && isMobile()) toc.classList.add('collapsed');
+    const a = e.target.closest('a');
+    if (!a) return;
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    if (isMobile()) toc.classList.add('collapsed');
+    history.replaceState(null, '', '#' + id);
+    requestAnimationFrame(() => target.scrollIntoView({ behavior:'smooth', block:'start' }));
   });
   window.addEventListener('resize', () => { if (!isMobile()) toc.classList.remove('collapsed'); });
 
@@ -1270,12 +1279,16 @@ git worktree list / remove <path> [--force]
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     btn.textContent = dark ? '☀️ 亮色' : '🌙 暗色';
     localStorage.setItem('cc-guide-dark', dark ? '1' : '0');
-    renderMermaid(dark ? 'dark' : 'default');
+    return renderMermaid(dark ? 'dark' : 'default');
   }
   btn.addEventListener('click', () =>
     applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
   const hash = location.hash;
-  applyTheme(hash==='#dark' ? true : hash==='#light' ? false : localStorage.getItem('cc-guide-dark')==='1');
+  const initRender = applyTheme(hash==='#dark' ? true : hash==='#light' ? false : localStorage.getItem('cc-guide-dark')==='1');
+  // 直接带 #sec-x 链接打开:等 mermaid 渲染完、布局稳定后再精确定位一次
+  if (/^#sec-\d+/.test(hash) && initRender && initRender.then) {
+    initRender.then(() => { const el = document.getElementById(hash.slice(1)); if (el) el.scrollIntoView({ block:'start' }); });
+  }
 
   // 7) 目录高亮 + 进度条
   const links = [...toc.querySelectorAll('a')];
