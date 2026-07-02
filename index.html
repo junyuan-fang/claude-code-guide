@@ -676,20 +676,87 @@ flowchart TD
 
 > 一句话:**默认视图 = `in-process`**。只有当你显式设 `teammateMode: auto/tmux/iterm2` 且终端支持分屏时,才会切到分屏视图。
 
-### 3.7 示例
+### 3.7 官方推荐的组队 Prompt 写法(带示例)
 
+> 以下示例全部来自官方文档 [code.claude.com/docs/en/agent-teams](https://code.claude.com/docs/en/agent-teams),**prompt 保留英文原文**,下面配中文注解。组队前记得先开 [§3.1](#) 的实验开关。核心公式:**`spawn` + 人数 + 每人一个明确角色/视角**。
+
+**① 基础组队 —— 分角色扇出**
 ```text
-# 并行代码审查
+I'm designing a CLI tool that helps developers track TODO comments across
+their codebase. Spawn three teammates to explore this from different angles:
+one on UX, one on technical architecture, one playing devil's advocate.
+```
+> 最基本式:每人点名一个独立视角。适合 3–5 个互不依赖、无需顺序的探索方向。
+
+**② 指定人数 + 模型**
+```text
+Spawn 4 teammates to refactor these modules in parallel. Use Sonnet for each teammate.
+```
+> 队员**默认不继承**你的 `/model`,想省钱/提速就显式写 "Use Sonnet / Use Opus"。
+
+**③ 先出计划、批准后再动手(风险闸)**
+```text
+Spawn an architect teammate to refactor the authentication module.
+Require plan approval before they make any changes.
+```
+> 队员进**只读计划模式**,你批准前不改任何代码 —— 高风险重构必备(对应 [§3.5](#) 的计划审批)。
+
+**④ 复用已有 subagent 定义当角色**
+```text
+Spawn a teammate using the security-reviewer agent type to audit the auth module.
+```
+> 把 `security-reviewer` / `test-runner` 等角色定义在 `.claude/agents/`,组队时按名字引用,自动套用其 `tools`/`model`。
+
+**⑤ 多角度并行代码审查(官方最推荐的入门场景)**
+```text
 Spawn three teammates to review PR #142:
 - One focused on security implications
 - One checking performance impact
 - One validating test coverage
-
-# 科学辩论式调试
-Users report the app exits after one message. Spawn 5 teammates to investigate
-different hypotheses. Have them talk to each other to disprove each other's
-theories, like a scientific debate. Update the findings doc with the consensus.
+Have them each review and report findings.
 ```
+> 按关注点(安全/性能/测试)切分,成功标准清晰、协调风险低。
+
+**⑥ 对抗式调查 —— 互相证伪**
+```text
+Users report the app exits after one message instead of staying connected.
+Spawn 5 agent teammates to investigate different hypotheses. Have them talk to
+each other to try to disprove each other's theories, like a scientific
+debate. Update the findings doc with whatever consensus emerges.
+```
+> `talk to each other` / `disprove each other` 触发队员间 **P2P 辩论** —— 这正是 Teams 相对 Subagent 的核心价值。
+
+**⑦ 给足上下文(把细节塞进 spawn prompt)**
+```text
+Spawn a security reviewer teammate with the prompt: "Review the authentication
+module at src/auth/ for security vulnerabilities. Focus on token handling,
+session management, and input validation. The app uses JWT tokens stored in
+httpOnly cookies. Report any issues with severity ratings."
+```
+> 队员**不自动继承**你对话历史里的上下文;范围、重点、技术前提、输出要求都要写进 spawn 指令本身。
+
+**⑧ 约束队长行为 —— 等队员干完再继续**
+```text
+Wait for your teammates to complete their tasks before proceeding
+```
+> 防止队长自己抢着并行实现,强制它先派活、等汇总。
+
+#### 官方 Prompt 最佳实践
+
+| 官方建议 | 要点 |
+|---|---|
+| **明确分工** | 每个队员点名一个视角(UX/架构/唱反调),避免重叠 |
+| **开启队员互通** | `have them talk to each other` / `challenge each other` —— Teams 区别于 Subagent 的核心 |
+| **上下文写进 spawn** | 别依赖队长历史;范围/重点/边界条件写进 spawn 指令 |
+| **队伍规模 3–5** | 从 3–5 人起步,每人约 5–6 个任务;有真实并行收益再加人 |
+| **复用 subagent 定义** | 角色定义在 `.claude/agents/`,按名字引用 |
+| **需要就指定模型** | 队员不继承队长 `/model`,显式 "Use Sonnet/Opus" |
+| **风险任务上计划审批** | `Require plan approval before they make any changes` |
+| **从研究/审查起步** | 成功标准清晰、协调风险低,先证明价值再扩到并行写码 |
+| **分派文件归属** | 每人负责不同文件/模块,防止互相覆盖 |
+| **在途监控与纠偏** | 查进度、及时纠偏、早综合,别长时间放养 |
+
+> ℹ️ **官方注记(v2.1.178+)**:组队**无需**手动建/删团队(不再有 `TeamCreate`/`TeamDelete`),自然语言 prompt + 队长批准即可。当前实验版限制:in-process 队员**不支持会话恢复**(`/resume`、`/rewind` 不还原队员)、**一个会话仅一个团队、不能嵌套团队**、队长在会话生命周期内固定。
 
 ---
 
