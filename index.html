@@ -289,7 +289,12 @@ flowchart TD
 > ① 自然语言委托:`用 code-reviewer 这个 subagent 审一下改动`(Claude 按 `description` 自动判断)
 > ② @点名(保证运行):`@agent-code-reviewer 看看 auth 模块`
 > ③ 整个会话都用:`claude --agent code-reviewer` 或 settings.json 写 `{ "agent": "code-reviewer" }`
-> 管理用 `/agents`;想后台跑就说「在后台运行」或按 `Ctrl+B`。
+> 创建/管理:跟 Claude 说「建一个 …… 的 subagent」,或直接编辑 `.claude/agents/`(项目)/ `~/.claude/agents/`(用户)文件;部分新版已移除 `/agents` 交互向导,以这两种为准。想后台跑就说「在后台运行」或按 `Ctrl+B`。
+
+> ⚠️ **三个长得像、别搞混:**
+> · **`/agents`**(会话内斜杠)= 创建/管理 subagent 的**向导**(部分新版已移除 → 改用自然语言 / 编辑文件)
+> · **`claude agents`**(shell,**无 `--`**)= 打开 **Agent View** 后台会话看板
+> · **`claude --agent <名字>`**(shell 参数)= 让**整段会话以某 subagent 角色运行**(≠ 看板)
 
 ### 1.1 它是什么 / 为什么用
 
@@ -363,7 +368,7 @@ flowchart TD
 flowchart TD
     Start([需要一个专用 worker]) --> Create{如何创建?}
 
-    Create -->|交互式,推荐| C1["/agents 命令<br/>填 name/description/tools/model/prompt<br/>✅ 立即生效"]
+    Create -->|自然语言,推荐| C1["跟 Claude 说:<br/>'建一个 code-reviewer subagent…'<br/>它帮你写好 .claude/agents 配置"]
     Create -->|手动| C2["在 .claude/agents/ 或<br/>~/.claude/agents/ 写 .md 文件<br/>⚠️ 需重启会话生效"]
     Create -->|临时| C3["claude --agents '{JSON}'<br/>仅本会话,不落盘"]
 
@@ -1206,10 +1211,12 @@ Spawn 3 teammates to develop and backtest three strategies in parallel:
 ## 附录:常用命令速查
 
 ```bash
-# —— Subagents ——
-/agents                                  # 交互式创建/管理
-claude --agent code-reviewer             # 整个会话用某 subagent
-claude --agents '{...}'                   # 临时定义(仅本会话)
+# —— Subagents(创建/管理)——
+# 让 Claude 建/改:「建一个 code-reviewer subagent,只读,用来审改动」
+# 或直接编辑:.claude/agents/(项目) / ~/.claude/agents/(用户)
+# 注:/agents 交互向导在部分新版已移除,以自然语言 / 文件为准
+claude --agent code-reviewer             # 整个会话以某 subagent 角色运行(≠ Agent View)
+claude --agents '{...}'                   # 临时定义(仅本会话,不落盘)
 
 # —— Agent View ——
 claude agents                            # 打开代理视图
